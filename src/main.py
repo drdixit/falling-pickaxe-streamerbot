@@ -2,7 +2,7 @@ import time
 import pygame
 import pymunk
 import pymunk.pygame_util
-from youtube import get_live_stream, get_new_live_chat_messages, get_live_chat_id, get_subscriber_count, validate_live_stream_id
+from streamerbot import start_client, get_new_messages
 from config import config
 from atlas import create_texture_atlas
 from pathlib import Path
@@ -12,8 +12,6 @@ from pickaxe import Pickaxe
 from camera import Camera
 from sound import SoundManager
 from tnt import Tnt, MegaTnt
-import asyncio
-import threading
 import random
 from hud import Hud
 from collections import deque
@@ -21,42 +19,6 @@ from collections import deque
 # Track key states
 key_t_pressed = False
 key_m_pressed = False
-
-#
-live_stream = None
-live_chat_id = None
-subscribers = None
-
-if config["CHAT_CONTROL"] == True:
-    print("Checking for specific live stream")
-    if config["LIVESTREAM_ID"] is not None and config["LIVESTREAM_ID"] != "":
-        stream_id = validate_live_stream_id(config["LIVESTREAM_ID"])
-        live_stream = get_live_stream(stream_id)
-
-    if live_stream is None:
-        print("No specific live stream found. App will run without it.")
-    else:
-        print("Live stream found:", live_stream["snippet"]["title"])
-
-    # get chat id from live stream
-    if live_stream is not None:
-        print("Fetching live chat ID...")
-        live_chat_id = get_live_chat_id(live_stream["id"])
-
-    if live_chat_id is None:
-        print("No live chat ID found. App will run without it.")
-    else:
-        print("Live chat ID found:", live_chat_id)
-
-    # get subscribers count
-    if(config["CHANNEL_ID"] is not None and config["CHANNEL_ID"] != ""):
-        print("Fetching subscribers count...")
-        subscribers = get_subscriber_count(config["CHANNEL_ID"])
-
-    if subscribers is None:
-        print("No subscribers count found. App will run without it.")
-    else:
-        print("Subscribers count found:", subscribers)
 
 # Queues for chat
 tnt_queue = deque()
@@ -71,98 +33,8 @@ pickaxe_queue = deque()
 pickaxe_authors = set()
 mega_tnt_queue = deque()
 
-async def handle_youtube_poll():
-    global subscribers # Use global to modify the variable
-
-    if subscribers is not None:
-        new_subscribers = get_subscriber_count(config["CHANNEL_ID"])
-        if new_subscribers is not None and new_subscribers > subscribers:
-            mega_tnt_queue.append("New Subscriber") # Add to mega tnt queue
-            subscribers = new_subscribers # Update subscriber count
-
-    new_messages = get_new_live_chat_messages(live_chat_id)
-
-    for message in new_messages:
-        author = message["author"]
-        text = message["message"]
-        is_superchat = message["sc_details"] is not None
-        is_supersticker = message["ss_details"] is not None
-
-        text_lower = text.lower()
-
-        # Check for "tnt" command (add author to regular tnt_queue) - Only English "tnt"
-        if "tnt" in text_lower:
-            if author not in tnt_queue_authors:
-                tnt_queue.append(author)
-                tnt_queue_authors.add(author)
-                print(f"Added {author} to regular TNT queue")
-
-        # Check for Superchat/Supersticker (add to superchat tnt queue)
-        if is_superchat or is_supersticker:
-            if author not in tnt_superchat_authors:
-                 tnt_superchat_queue.append((author, text))
-                 tnt_superchat_authors.add(author)
-                 print(f"Added {author} to Superchat TNT queue")
-
-        if "fast" in text.lower() and author not in fast_slow_authors:
-            fast_slow_queue.append((author, "Fast"))
-            fast_slow_authors.add(author)
-            print(f"Added {author} to Fast/Slow queue (Fast)")
-        elif "slow" in text.lower() and author not in fast_slow_authors:
-            fast_slow_queue.append((author, "Slow"))
-            fast_slow_authors.add(author)
-            print(f"Added {author} to Fast/Slow queue (Slow)")
-
-        if "big" in text.lower() and author not in big_authors:
-            big_queue.append(author)
-            big_authors.add(author)
-            print(f"Added {author} to Big queue")
-
-        # Check for pickaxe commands (add author and pickaxe type to pickaxe_queue)
-        if "wood" in text_lower:
-             if author not in pickaxe_authors:
-                 pickaxe_queue.append((author, "wooden_pickaxe"))
-                 pickaxe_authors.add(author)
-                 print(f"Added {author} to Pickaxe queue (wooden_pickaxe)")
-        elif "stone" in text_lower:
-             if author not in pickaxe_authors:
-                 pickaxe_queue.append((author, "stone_pickaxe"))
-                 pickaxe_authors.add(author)
-                 print(f"Added {author} to Pickaxe queue (stone_pickaxe)")
-        elif "iron" in text_lower:
-             if author not in pickaxe_authors:
-                 pickaxe_queue.append((author, "iron_pickaxe"))
-                 pickaxe_authors.add(author)
-                 print(f"Added {author} to Pickaxe queue (iron_pickaxe)")
-        elif "gold" in text_lower:
-             if author not in pickaxe_authors:
-                 pickaxe_queue.append((author, "golden_pickaxe"))
-                 pickaxe_authors.add(author)
-                 print(f"Added {author} to Pickaxe queue (golden_pickaxe)")
-        elif "diamond" in text_lower:
-             if author not in pickaxe_authors:
-                 pickaxe_queue.append((author, "diamond_pickaxe"))
-                 pickaxe_authors.add(author)
-                 print(f"Added {author} to Pickaxe queue (diamond_pickaxe)")
-        elif "netherite" in text_lower:
-             if author not in pickaxe_authors:
-                 pickaxe_queue.append((author, "netherite_pickaxe"))
-                 pickaxe_authors.add(author)
-                 print(f"Added {author} to Pickaxe queue (netherite_pickaxe)")
-
-    # print the queue counts (optional, for debugging)
-    # print(f"Queues: TNT={len(tnt_queue)}, Superchat TNT={len(tnt_superchat_queue)}, Fast/Slow={len(fast_slow_queue)}, Big={len(big_queue)}, Pickaxe={len(pickaxe_queue)}, MegaTNT={len(mega_tnt_queue)}")
-
-def start_event_loop(loop):
-    asyncio.set_event_loop(loop)
-    loop.run_forever()
-
-# Create a new event loop
-asyncio_loop = asyncio.new_event_loop()
-# Start it in a daemon thread so it doesn’t block shutdown
-threading.Thread(target=start_event_loop, args=(asyncio_loop,), daemon=True).start()
-
 def game():
+    start_client()
     window_width = int(INTERNAL_WIDTH / 2)
     window_height = int(INTERNAL_HEIGHT / 2)
 
@@ -358,11 +230,78 @@ def game():
         for tnt in tnt_list:
             tnt.update(tnt_list, explosions, camera, current_time)
 
-        # Poll Yotutube api
-        if live_chat_id is not None and current_time - last_yt_poll >= yt_poll_interval:
-            print("Polling YouTube API...")
+        # Poll Streamer.bot
+        if config["CHAT_CONTROL"] == True and current_time - last_yt_poll >= yt_poll_interval:
             last_yt_poll = current_time
-            asyncio.run_coroutine_threadsafe(handle_youtube_poll(), asyncio_loop)
+            new_messages = get_new_messages()
+
+            for message in new_messages:
+                author = message["author"]
+                text = message["message"]
+                is_superchat = message["sc_details"] is not None
+                is_supersticker = message["ss_details"] is not None
+
+                text_lower = text.lower()
+
+                # Check for "tnt" command (add author to regular tnt_queue) - Only English "tnt"
+                if "tnt" in text_lower:
+                    if author not in tnt_queue_authors:
+                        tnt_queue.append(author)
+                        tnt_queue_authors.add(author)
+                        print(f"Added {author} to regular TNT queue")
+
+                # Check for Superchat/Supersticker (add to superchat tnt queue)
+                if is_superchat or is_supersticker:
+                    if author not in tnt_superchat_authors:
+                        tnt_superchat_queue.append((author, text))
+                        tnt_superchat_authors.add(author)
+                        print(f"Added {author} to Superchat TNT queue")
+
+                if "fast" in text.lower() and author not in fast_slow_authors:
+                    fast_slow_queue.append((author, "Fast"))
+                    fast_slow_authors.add(author)
+                    print(f"Added {author} to Fast/Slow queue (Fast)")
+                elif "slow" in text.lower() and author not in fast_slow_authors:
+                    fast_slow_queue.append((author, "Slow"))
+                    fast_slow_authors.add(author)
+                    print(f"Added {author} to Fast/Slow queue (Slow)")
+
+                if "big" in text.lower() and author not in big_authors:
+                    big_queue.append(author)
+                    big_authors.add(author)
+                    print(f"Added {author} to Big queue")
+
+                # Check for pickaxe commands (add author and pickaxe type to pickaxe_queue)
+                if "wood" in text_lower:
+                    if author not in pickaxe_authors:
+                        pickaxe_queue.append((author, "wooden_pickaxe"))
+                        pickaxe_authors.add(author)
+                        print(f"Added {author} to Pickaxe queue (wooden_pickaxe)")
+                elif "stone" in text_lower:
+                    if author not in pickaxe_authors:
+                        pickaxe_queue.append((author, "stone_pickaxe"))
+                        pickaxe_authors.add(author)
+                        print(f"Added {author} to Pickaxe queue (stone_pickaxe)")
+                elif "iron" in text_lower:
+                    if author not in pickaxe_authors:
+                        pickaxe_queue.append((author, "iron_pickaxe"))
+                        pickaxe_authors.add(author)
+                        print(f"Added {author} to Pickaxe queue (iron_pickaxe)")
+                elif "gold" in text_lower:
+                    if author not in pickaxe_authors:
+                        pickaxe_queue.append((author, "golden_pickaxe"))
+                        pickaxe_authors.add(author)
+                        print(f"Added {author} to Pickaxe queue (golden_pickaxe)")
+                elif "diamond" in text_lower:
+                    if author not in pickaxe_authors:
+                        pickaxe_queue.append((author, "diamond_pickaxe"))
+                        pickaxe_authors.add(author)
+                        print(f"Added {author} to Pickaxe queue (diamond_pickaxe)")
+                elif "netherite" in text_lower:
+                    if author not in pickaxe_authors:
+                        pickaxe_queue.append((author, "netherite_pickaxe"))
+                        pickaxe_authors.add(author)
+                        print(f"Added {author} to Pickaxe queue (netherite_pickaxe)")
 
         # Process chat queues
         if config["CHAT_CONTROL"] and current_time - last_queues_pop >= queues_pop_interval:
