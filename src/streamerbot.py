@@ -12,20 +12,35 @@ def _on_message(ws, message):
         data = json.loads(message)
         event = data.get("event", {})
         
-        # Streamer.bot Twitch/YouTube ChatMessage event structure
-        if event.get("type") in ["ChatMessage", "Message"]:
-            msg_data = data.get("data", {}).get("message", {})
-            # Twitch uses "username", YouTube might use "displayName" or similar, fallback to "author"
-            author = msg_data.get("username") or msg_data.get("displayName") or "Unknown"
-            text = msg_data.get("message", "")
+        # Streamer.bot YouTube Message and Subscriber events
+        if event.get("type") in ["Message", "Subscriber"]:
+            payload_data = data.get("data", {})
             
-            with _lock:
-                _message_queue.append({
-                    "author": author,
-                    "message": text,
-                    "sc_details": None, # Ignore superchats for now or map if data is available
-                    "ss_details": None
-                })
+            # Message event
+            if event.get("type") == "Message":
+                author = payload_data.get("user", {}).get("name") or "Unknown"
+                text = payload_data.get("message") or ""
+                with _lock:
+                    _message_queue.append({
+                        "author": author,
+                        "message": text,
+                        "sc_details": None,
+                        "ss_details": None,
+                        "is_subscriber": False
+                    })
+            
+            # Subscriber event
+            elif event.get("type") == "Subscriber":
+                user_data = payload_data.get("user", {})
+                author = user_data.get("name") or user_data.get("displayName") or "Someone"
+                with _lock:
+                    _message_queue.append({
+                        "author": author,
+                        "message": "",
+                        "sc_details": None,
+                        "ss_details": None,
+                        "is_subscriber": True
+                    })
     except Exception as e:
         print(f"Error parsing Streamer.bot message: {e}")
 
@@ -37,12 +52,11 @@ def _on_close(ws, close_status_code, close_msg):
 
 def _on_open(ws):
     print("Connected to Streamer.bot WS")
-    # Subscribe to chat messages
+    # Subscribe to chat messages and subscribers
     sub_msg = {
         "request": "Subscribe",
         "events": {
-            "Twitch": ["ChatMessage"],
-            "YouTube": ["Message"]
+            "YouTube": ["Message", "Subscriber"]
         },
         "id": "falling-pickaxe"
     }

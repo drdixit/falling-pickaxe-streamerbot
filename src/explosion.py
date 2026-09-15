@@ -2,14 +2,15 @@ import pygame
 import random
 
 class ExplosionParticle:
+    _rotated_frames_cache = {}
+
     def __init__(self, pos, texture_atlas, atlas_items, frame_count=16, frame_duration=1):
         """
         :param pos: Starting position (tuple or pygame.Vector2)
         :param texture_atlas: The atlas surface containing the explosion frames.
         :param atlas_items: A dict with keys like "explosion_0", "explosion_1", ... up to frame_count-1.
         :param frame_count: Total number of explosion frames.
-        :param animation_duration: Total duration of the animation. Interpreted either in ms or frames.
-        :param duration_mode: Either 'ms' for milliseconds or 'frames' for game frames.
+        :param frame_duration: Duration of each frame.
         """
         self.pos = pygame.Vector2(pos)
         self.texture_atlas = texture_atlas
@@ -21,15 +22,19 @@ class ExplosionParticle:
         self.current_frame = 0
         self.finished = False
 
-        # Random rotation between 0 and 360 degrees.
-        self.rotation = random.uniform(0, 360)
-        self.frames = []
-        for i in range(self.frame_count):
-            key = f"explosion_{i}"
-            rect = pygame.Rect(self.atlas_items["particle"][key])
-            texture = self.texture_atlas.subsurface(rect)
-            texture = pygame.transform.rotate(texture, self.rotation)
-            self.frames.append(texture)
+        # Random rotation snapped to 15 degrees for caching
+        angle = random.choice(range(0, 360, 15))
+        
+        if angle not in ExplosionParticle._rotated_frames_cache:
+            frames = []
+            for i in range(self.frame_count):
+                key = f"explosion_{i}"
+                rect = pygame.Rect(self.atlas_items["particle"][key])
+                texture = self.texture_atlas.subsurface(rect)
+                frames.append(pygame.transform.rotate(texture, angle))
+            ExplosionParticle._rotated_frames_cache[angle] = frames
+            
+        self.frames = ExplosionParticle._rotated_frames_cache[angle]
 
     def update(self, dt_ms):
         """Update animation frame based on elapsed time or frame count."""

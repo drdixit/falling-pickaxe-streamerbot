@@ -62,6 +62,15 @@ class Hud:
         self.fast_slow_cache = None
         self.fast_slow_surface = None
 
+        self.thank_you_messages = []  # List of dicts: {'surface': surface, 'expires': time}
+
+    def show_thank_you(self, message, current_time, duration_ms=5000):
+        surface = render_text_with_outline(message, self.font, (255, 255, 0), (0, 0, 0), outline_width=3)
+        self.thank_you_messages.append({
+            'surface': surface,
+            'expires': current_time + duration_ms
+        })
+
     def update_amounts(self, new_amounts):
         """
         Update the ore amounts.
@@ -115,6 +124,21 @@ class Hud:
         fast_slow_x = x + self.spacing
         fast_slow_y = y + 2 * self.spacing + self.fast_slow_surface.get_height()
         screen.blit(self.fast_slow_surface, (fast_slow_x, fast_slow_y))
+
+        # Draw thank you messages if active
+        current_time = pygame.time.get_ticks()
+        
+        # Remove expired messages
+        self.thank_you_messages = [msg for msg in self.thank_you_messages if current_time < msg['expires']]
+        
+        # Draw stacked messages
+        screen_w = screen.get_width()
+        msg_base_y = 100
+        for i, msg in enumerate(self.thank_you_messages):
+            surface = msg['surface']
+            msg_x = (screen_w - surface.get_width()) // 2
+            msg_y = msg_base_y + (i * (surface.get_height() + 10))
+            screen.blit(surface, (msg_x, msg_y))
 
             
 
