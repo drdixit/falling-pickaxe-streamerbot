@@ -1,7 +1,7 @@
-CHUNK_WIDTH = 9  # Number of blocks per chunk width
-CHUNK_HEIGHT = 16  # Number of blocks per chunk height
+CHUNK_WIDTH = 12  # Number of blocks per chunk width
+CHUNK_HEIGHT = 9  # Number of blocks per chunk height
 SEED = 12345  # Fixed seed for world consistency
-INTERNAL_WIDTH, INTERNAL_HEIGHT = 1080, 1920
+INTERNAL_WIDTH, INTERNAL_HEIGHT = 1440, 1080
 BLOCK_TEXTURE_SIZE = 16
 BLOCK_SCALE_FACTOR = INTERNAL_WIDTH / BLOCK_TEXTURE_SIZE / CHUNK_WIDTH
 BLOCK_SIZE = int(INTERNAL_WIDTH / CHUNK_WIDTH)

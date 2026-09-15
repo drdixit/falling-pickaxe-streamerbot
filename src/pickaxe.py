@@ -35,6 +35,12 @@ class Pickaxe:
         self.damage = damage
         self.is_enlarged = False
 
+        self.transform_timer = -1000
+        self.big_timer = -1000
+        self.fast_timer = -1000
+        self.slow_timer = -1000
+        self.particles = []
+
         vertices = rotate_vertices([
                     (0, 0), # A
                     (10, 0), # C
@@ -106,6 +112,12 @@ class Pickaxe:
         pickaxe_name = random.choice(list(atlas_items["pickaxe"].keys()))
         self.texture = texture_atlas.subsurface(atlas_items["pickaxe"][pickaxe_name])
         print("Setting pickaxe to:", pickaxe_name)
+        
+        self.transform_timer = pygame.time.get_ticks()
+        self.spawn_burst(pickaxe_name)
+        try:
+            self.sound_manager.play_sound("stone1")
+        except: pass
 
         if self.is_enlarged:
             # Scale up texture
@@ -131,6 +143,13 @@ class Pickaxe:
         self.texture = texture_atlas.subsurface(atlas_items["pickaxe"][name])
         print("Setting pickaxe to:", name)
 
+        # Transformation juice!
+        self.transform_timer = pygame.time.get_ticks()
+        self.spawn_burst(name)
+        try:
+            self.sound_manager.play_sound("stone1")
+        except: pass
+
         if self.is_enlarged:
             # Scale up texture
             new_size = (BLOCK_SIZE * 3, BLOCK_SIZE * 3)
@@ -149,10 +168,72 @@ class Pickaxe:
         elif(name =="netherite_pickaxe"):
             self.damage = 12
 
+    def spawn_burst(self, pickaxe_name):
+        colors = {
+            "wooden_pickaxe": (139, 69, 19), # Brown
+            "stone_pickaxe": (128, 128, 128), # Grey
+            "iron_pickaxe": (220, 220, 220), # Light grey/white
+            "golden_pickaxe": (255, 215, 0), # Gold
+            "diamond_pickaxe": (0, 255, 255), # Cyan
+            "netherite_pickaxe": (75, 0, 130)  # Dark purple
+        }
+        color = colors.get(pickaxe_name, (255, 255, 255))
+        
+        scale_mult = 3 if getattr(self, "is_enlarged", False) else 1
+        num_particles = 30 * scale_mult
+        
+        for _ in range(num_particles):
+            self.particles.append({
+                "pos": [self.body.position.x + random.randint(-20 * scale_mult, 20 * scale_mult), 
+                        self.body.position.y + random.randint(-20 * scale_mult, 20 * scale_mult)],
+                "vel": [random.uniform(-5 * scale_mult, 5 * scale_mult), 
+                        random.uniform(-10 * scale_mult, 2 * scale_mult)],
+                "color": color,
+                "size": random.randint(3 * scale_mult, 8 * scale_mult),
+                "life": 255
+            })
+
     def update(self, current_time=None):
         """Apply gravity, update movement, check collisions, and rotate."""
         if current_time is None:
             current_time = pygame.time.get_ticks()
+            
+        # Spawn fast fire particles
+        if current_time - self.fast_timer < 1000:
+            scale_mult = 3 if getattr(self, "is_enlarged", False) else 1
+            for _ in range(2 * scale_mult):
+                self.particles.append({
+                    "pos": [self.body.position.x + random.randint(-30 * scale_mult, 30 * scale_mult), 
+                            self.body.position.y - (40 * scale_mult)],
+                    "vel": [random.uniform(-1 * scale_mult, 1 * scale_mult), 
+                            random.uniform(-5 * scale_mult, -2 * scale_mult)],
+                    "color": random.choice([(255, 69, 0), (255, 140, 0), (255, 215, 0)]), # Fire colors
+                    "size": random.randint(4 * scale_mult, 10 * scale_mult),
+                    "life": 255
+                })
+                
+        # Spawn slow snowflake particles
+        if current_time - self.slow_timer < 1000:
+            scale_mult = 3 if getattr(self, "is_enlarged", False) else 1
+            if random.random() < 0.8: # Spawn rate
+                self.particles.append({
+                    "pos": [self.body.position.x + random.randint(-50 * scale_mult, 50 * scale_mult), 
+                            self.body.position.y + random.randint(-50 * scale_mult, 50 * scale_mult)],
+                    "vel": [random.uniform(-1 * scale_mult, 1 * scale_mult), 
+                            random.uniform(1 * scale_mult, 3 * scale_mult)], # Drifting down slowly
+                    "color": (200, 240, 255), # Ice blue / white
+                    "size": random.randint(3 * scale_mult, 6 * scale_mult),
+                    "life": 255
+                })
+                
+        # Update particles
+        for p in reversed(self.particles):
+            p["pos"][0] += p["vel"][0]
+            p["pos"][1] += p["vel"][1]
+            p["life"] -= 10
+            if p["life"] <= 0:
+                self.particles.remove(p)
+                
         # Manually limit the falling speed (terminal velocity)
         if self.body.velocity.y > 1000:
             self.body.velocity = (self.body.velocity.x, 1000)
@@ -189,15 +270,47 @@ class Pickaxe:
 
     def draw(self, screen, camera):
         """Draw the pickaxe at its current position."""
-        rotated_image = pygame.transform.rotate(self.texture, -math.degrees(self.body.angle))  # Convert to degrees
+        current_time = pygame.time.get_ticks()
+        scale_factor = 1.0
+
+        # Squash & Stretch for Transformation (Bounces up to 1.5x)
+        if current_time - self.transform_timer < 300:
+            progress = (current_time - self.transform_timer) / 300.0
+            scale_factor += math.sin(progress * math.pi) * 0.5 
+
+        # Rubber-band snap for Big command (Bounces extra 30%)
+        if current_time - self.big_timer < 300:
+            progress = (current_time - self.big_timer) / 300.0
+            scale_factor += math.sin(progress * math.pi) * 0.3 
+
+        # Use rotozoom for smooth scaling and rotation without shimmer
+        angle_deg = -math.degrees(self.body.angle)
+        rotated_image = pygame.transform.rotozoom(self.texture, angle_deg, scale_factor)
+            
         rect = rotated_image.get_rect(center=(self.body.position.x, self.body.position.y))
         rect.y -= camera.offset_y
         rect.x -= camera.offset_x
+        
         screen.blit(rotated_image, rect)
+            
+        # Draw particles (Transformations, Fire, and Snow)
+        for p in self.particles:
+            alpha = max(0, min(255, p["life"]))
+            if alpha > 0:
+                p_surf = pygame.Surface((p["size"], p["size"]), pygame.SRCALPHA)
+                p_surf.fill((*p["color"], alpha))
+                p_rect = p_surf.get_rect(center=(p["pos"][0] - camera.offset_x, p["pos"][1] - camera.offset_y))
+                screen.blit(p_surf, p_rect)
 
     def enlarge(self, duration=5000):
         """Temporarily makes the pickaxe 3 times bigger with a larger hitbox."""
         print("Enlarging pickaxe")
+
+        # Big juice!
+        self.big_timer = pygame.time.get_ticks()
+        try:
+            self.sound_manager.play_sound("tnt")
+        except: pass
 
         # If already enlarged, just extend the duration.
         if hasattr(self, "is_enlarged") and self.is_enlarged:

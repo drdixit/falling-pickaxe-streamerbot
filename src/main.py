@@ -20,6 +20,10 @@ from collections import deque
 key_t_pressed = False
 key_m_pressed = False
 key_s_pressed = False
+key_i_pressed = False
+key_b_pressed = False
+key_f_pressed = False
+key_l_pressed = False
 
 # Queues for chat
 tnt_queue = deque()
@@ -151,6 +155,19 @@ def game():
                 window_width, window_height = new_width, new_height
                 screen = pygame.display.set_mode((window_width, window_height), pygame.RESIZABLE)
                 scaled_surface = pygame.Surface((window_width, window_height)).convert()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_1:
+                    pickaxe_queue.append(("TestUser", "wooden_pickaxe"))
+                elif event.key == pygame.K_2:
+                    pickaxe_queue.append(("TestUser", "stone_pickaxe"))
+                elif event.key == pygame.K_3:
+                    pickaxe_queue.append(("TestUser", "iron_pickaxe"))
+                elif event.key == pygame.K_4:
+                    pickaxe_queue.append(("TestUser", "golden_pickaxe"))
+                elif event.key == pygame.K_5:
+                    pickaxe_queue.append(("TestUser", "diamond_pickaxe"))
+                elif event.key == pygame.K_6:
+                    pickaxe_queue.append(("TestUser", "netherite_pickaxe"))
 
         # ++++++++++++++++++  UPDATE ++++++++++++++++++
         # Determine which chunks are visible
@@ -316,12 +333,19 @@ def game():
                 last_fast_slow = current_time
                 fast_slow = q_fast_slow
                 fast_slow_interval = 1000 * random.uniform(config["FAST_SLOW_INTERVAL_SECONDS_MIN"], config["FAST_SLOW_INTERVAL_SECONDS_MAX"])
+                
+                # Add juice timers
+                if fast_slow == "Fast":
+                    pickaxe.fast_timer = current_time
+                elif fast_slow == "Slow":
+                    pickaxe.slow_timer = current_time
 
             # Handle Big pickaxe command
             while big_queue:
                 author = big_queue.popleft()
                 print(f"Making pickaxe big for {author}")
                 pickaxe.enlarge(enlarge_duration)
+                camera.shake(30, 15)  # Massive screen shake for BIG
                 last_enlarge = current_time + enlarge_duration
                 enlarge_interval = 1000 * random.uniform(config["PICKAXE_ENLARGE_INTERVAL_SECONDS_MIN"], config["PICKAXE_ENLARGE_INTERVAL_SECONDS_MAX"])
 
@@ -440,6 +464,34 @@ def game():
             key_s_pressed = True
         else:
             key_s_pressed = False
+
+        if keys[pygame.K_i]:
+            if not key_i_pressed:
+                pickaxe_queue.append(("TestUser", "iron_pickaxe"))
+            key_i_pressed = True
+        else:
+            key_i_pressed = False
+            
+        if keys[pygame.K_b]:
+            if not key_b_pressed:
+                big_queue.append("TestUser")
+            key_b_pressed = True
+        else:
+            key_b_pressed = False
+            
+        if keys[pygame.K_f]:
+            if not key_f_pressed:
+                fast_slow_queue.append(("TestUser", "Fast"))
+            key_f_pressed = True
+        else:
+            key_f_pressed = False
+            
+        if keys[pygame.K_l]:
+            if not key_l_pressed:
+                fast_slow_queue.append(("TestUser", "Slow"))
+            key_l_pressed = True
+        else:
+            key_l_pressed = False
 
     # Quit pygame properly
     pygame.quit()
