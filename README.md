@@ -1,5 +1,4 @@
 # Project Starting Guide
-
 Always follow these steps to start and run the application.
 
 ## 1. Remove System Aliases
